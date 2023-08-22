@@ -1,0 +1,40 @@
+import pandas as pd
+import os
+from google.cloud import storage
+
+# Set up GCP storage client
+client = storage.Client.from_service_account_json('/path_to_your_service_account_key.json')
+bucket_name = 'your_bucket_name'
+bucket = client.get_bucket(bucket_name)
+
+# Directory containing your xlsx files
+source_directory_path = '/path_to_your_directory_with_xlsx_files/'
+
+# Directory where you want to temporarily save the csv files before uploading
+output_directory_path = '/temporary_directory_for_csv_files/'
+
+# Loop through each file in the directory
+for filename in os.listdir(source_directory_path):
+    if filename.endswith(".xlsx"):
+        file_path = os.path.join(source_directory_path, filename)
+        xl = pd.ExcelFile(file_path)
+        
+        # Loop through each sheet in the Excel file
+        for sheet_name in xl.sheet_names:
+            df = xl.parse(sheet_name)
+            
+            # Generate CSV file name based on the original Excel filename and sheet name
+            csv_filename = f"{filename.replace('.xlsx', '')}_{sheet_name}.csv"
+            csv_path = os.path.join(output_directory_path, csv_filename)
+            
+            # Save to CSV (this will overwrite existing files with the same name)
+            df.to_csv(csv_path, index=False)
+            
+            # Upload to GCP Bucket
+            blob = bucket.blob(csv_filename)
+            blob.upload_from_filename(csv_path)
+            
+            print(f"Uploaded {csv_path} to {bucket_name}")
+
+            # Optionally, you can delete the local .csv after uploading
+            os.remove(csv_path)
